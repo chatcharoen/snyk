@@ -1,4 +1,6 @@
 import * as debugModule from 'debug';
+import * as pathUtil from 'path';
+import * as _ from 'lodash';
 import { legacyPlugin as pluginApi } from '@snyk/cli-interface';
 import { find } from '../find-files';
 import { Options, TestOptions, MonitorOptions } from '../types';
@@ -45,6 +47,31 @@ export async function getDepsFromPlugin(
       multiProjectProcessors[scanType].files,
       levelsDeep,
     );
+    const gradleTargetFiles = await find(
+      root,
+      ignore,
+      ['build.gradle'],
+      levelsDeep,
+    );
+
+    const sortedGradleTargetFiles: {
+      [dir: string]: Array<{
+        path: string;
+        base: string;
+        dir: string;
+      }>;
+    } = _(gradleTargetFiles)
+      .map((p) => ({ path: p, ...pathUtil.parse(p) }))
+      .sortBy('dir')
+      .groupBy('dir')
+      .value();
+
+    if (Object.keys(sortedGradleTargetFiles).length > 0) {
+      options.allSubProjects = true;
+      const key = Object.keys(sortedGradleTargetFiles)[0];
+      targetFiles.push(sortedGradleTargetFiles[key][0].path);
+    }
+    // push only 1 root most
     debug(
       `auto detect manifest files, found ${targetFiles.length}`,
       targetFiles,
